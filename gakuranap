@@ -1,0 +1,343 @@
+local white = color(1, 1, 1, 1)
+local green = color(0, 1, 0, 1)
+local yellow = color(1, 1, 0, 1)
+local RING_COLOR = color(0.2, 0.8, 1, 1)
+local CONE_COLOR = color(1, 0.2, 0.2, 1)
+
+hook.remove("render", "gakuran_parry")
+hook.remove("render", "id_crack")
+gui.remove("Gakuran Parry")
+
+local OFF = {
+    ActiveAnimations = 0x9D0,
+    AnimTrack        = 0xB8,
+    TimePosition     = 0xD0,
+    AnimationId      = 0xC0,
+    NodeSlot         = 0x10,
+    ListNext         = 0x0,
+}
+
+local KEY_PARRY = 0x46 -- F
+local KEY_DODGE = 0x51 -- Q
+local RING_SEGMENTS = 40
+local FEET_OFFSET = 3
+
+local ATTACKS = {
+    ["rbxassetid://77957614227468"]  = { parry = 0.15 },
+    ["rbxassetid://105109868069470"] = { parry = 0.15 },
+    ["rbxassetid://86918714359440"]  = { parry = 0.15 },
+    ["rbxassetid://111317285324171"] = { parry = 0.15 },
+    ["rbxassetid://130884585830171"] = { parry = 0.30, m2 = true },
+    ["rbxassetid://132178222366446"] = { parry = 0.15 },
+    ["rbxassetid://128114472490928"] = { parry = 0.15 },
+    ["rbxassetid://138624221040888"] = { parry = 0.15 },
+    ["rbxassetid://103849336431154"] = { parry = 0.15 },
+    ["rbxassetid://134616225320869"] = { parry = 0.30, m2 = true },
+    ["rbxassetid://97280263199117"]  = { parry = 0.15 },
+    ["rbxassetid://136563726541554"] = { parry = 0.15 },
+    ["rbxassetid://127253080182564"] = { parry = 0.15 },
+    ["rbxassetid://85098647244472"]  = { parry = 0.15 },
+    ["rbxassetid://114254289386168"] = { parry = 0.30, m2 = true },
+    ["rbxassetid://73977397773505"]  = { parry = 0.15 },
+    ["rbxassetid://140559915903523"] = { parry = 0.15 },
+    ["rbxassetid://82475370801539"]  = { parry = 0.15 },
+    ["rbxassetid://82164598010704"]  = { parry = 0.15 },
+    ["rbxassetid://103379337847201"] = { parry = 0.30, m2 = true },
+    ["rbxassetid://87171697393871"]  = { parry = 0.29 },
+    ["rbxassetid://140530278540076"] = { parry = 0.15 },
+    ["rbxassetid://73865503612362"]  = { parry = 0.15 },
+    ["rbxassetid://75692393601509"]  = { parry = 0.15 },
+    ["rbxassetid://101188641038819"] = { parry = 0.30, m2 = true },
+    ["rbxassetid://95267170062803"]  = { parry = 0.15 },
+    ["rbxassetid://95363684987743"]  = { parry = 0.15 },
+    ["rbxassetid://139875456638239"] = { parry = 0.15 },
+    ["rbxassetid://133112087379005"] = { parry = 0.15 },
+    ["rbxassetid://128479795877497"] = { parry = 0.40, m2 = true },
+    ["rbxassetid://95359912376713"]  = { parry = 0.285 },
+    ["rbxassetid://127631232991111"] = { parry = 0.15 },
+    ["rbxassetid://71447243477669"]  = { parry = 0.15 },
+    ["rbxassetid://73898520591442"]  = { parry = 0.15 },
+    ["rbxassetid://137330597899886"] = { parry = 0.30, m2 = true },
+    ["rbxassetid://135304344348112"] = { parry = 0.15 },
+    ["rbxassetid://136278929175728"] = { parry = 0.15 },
+    ["rbxassetid://73329541283787"]  = { parry = 0.15 },
+    ["rbxassetid://83785650808219"]  = { parry = 0.15 },
+    ["rbxassetid://116328113967477"] = { parry = 0.30, m2 = true },
+}
+
+local menu = gui.create("Gakuran Parry", false)
+menu:set_size(310, 480)
+
+local enabled   = menu:add_checkbox("Auto Parry", true)
+local dodge_m2  = menu:add_checkbox("Dodge M2 (Q)", false)
+local debug_on  = menu:add_checkbox("Debug", true)
+
+menu:add_label("Timing")
+local prefire_s = menu:add_slider("Pre-Fire (ms)", 0, 200, 60)
+local hold_s    = menu:add_slider("Parry Hold (ms)", 10, 300, 40)
+local cd_s      = menu:add_slider("Cooldown (ms)", 50, 800, 250)
+local pingcomp  = menu:add_checkbox("Ping Compensation", true)
+
+menu:add_label("Range")
+local range_s   = menu:add_slider("Range (studs)", 6, 25, 14)
+local front_on  = menu:add_checkbox("Front Only", true)
+local cone_s    = menu:add_slider("Front Cone (deg)", 30, 360, 140)
+local show_vis  = menu:add_checkbox("Show Range + Cone", true)
+
+local act_lbl   = menu:add_label("status: idle")
+
+-- ── parry state machine ──
+local parried = {}        -- slot_id -> true (one commit per swing)
+local parry_count = 0
+local last_clear = 0
+local last_parry_time = 0  -- for cooldown
+local key_down_until = 0   -- when to release the held key
+local key_is_down = nil    -- which key is currently held (or nil)
+
+local function valid(inst)
+    return inst and inst:isvalid()
+end
+
+local function rd_ptr(inst, offset)
+    if not inst then return nil end
+    local ok, v = pcall(inst.read_memory, inst, offset, MEMORY_POINTER)
+    if ok and v then return v end
+    return nil
+end
+
+local function rd_float(inst, offset)
+    if not inst then return nil end
+    local ok, v = pcall(inst.read_memory, inst, offset, MEMORY_FLOAT)
+    if ok then return v end
+    return nil
+end
+
+local function rd_str(inst, offset)
+    if not inst then return nil end
+    local ok, v = pcall(inst.read_memory, inst, offset, MEMORY_STRING)
+    if ok then return v end
+    return nil
+end
+
+local function get_attack(animator)
+    local list = rd_ptr(animator, OFF.ActiveAnimations)
+    if not list then return nil, nil, nil end
+
+    local origin_id = list.identity
+    local node = rd_ptr(list, 0x0)
+    local i = 0
+
+    while node and node.identity ~= origin_id and i < 30 do
+        i = i + 1
+        local slot = rd_ptr(node, OFF.NodeSlot)
+        if slot then
+            local anim = rd_ptr(slot, OFF.AnimTrack)
+            if anim then
+                local asset = rd_str(anim, OFF.AnimationId)
+                if asset and ATTACKS[asset] then
+                    local tpos = rd_float(slot, OFF.TimePosition) or 0
+                    return asset, tpos, slot.identity
+                end
+            end
+        end
+        node = rd_ptr(node, OFF.ListNext)
+    end
+
+    return nil, nil, nil
+end
+
+-- press a key with hold, tracked so we don't stack presses
+local function press_key(key, hold_ms)
+    if key_is_down then return end -- already holding, don't stack
+    key_is_down = key
+    key_down_until = get_tickcount() + hold_ms
+    input.simulate_press_down(key)
+end
+
+local function release_if_due(now)
+    if key_is_down and now >= key_down_until then
+        input.simulate_press_up(key_is_down)
+        key_is_down = nil
+    end
+end
+
+local function get_my_root()
+    local players = game:get_service("Players")
+    local lp = valid(players) and players.local_player or nil
+    local char = valid(lp) and lp.character or nil
+    if not valid(char) then return nil end
+    return char:find_first_child("HumanoidRootPart")
+end
+
+local function my_forward(root)
+    local look = root.cframe_lookvector
+    local x = look and (look.x or 0) or 0
+    local z = look and (look.z or -1) or -1
+    local mag = math.sqrt((x * x) + (z * z))
+    if mag < 0.001 then return 0, -1 end
+    return x / mag, z / mag
+end
+
+local function draw_ring(cx, cy, cz, radius)
+    local prev, prev_ok = nil, false
+    local i = 0
+    while i <= RING_SEGMENTS do
+        local ang = (i / RING_SEGMENTS) * math.pi * 2
+        local wp = vector3(cx + math.cos(ang) * radius, cy, cz + math.sin(ang) * radius)
+        local sp = world_to_screen(wp)
+        local ok = in_screen(sp)
+        if prev and prev_ok and ok then
+            render.add_line(prev, sp, RING_COLOR, 2)
+        end
+        prev, prev_ok = sp, ok
+        i = i + 1
+    end
+end
+
+local function draw_cone_line(cx, cy, cz, fx, fz, ang, radius)
+    local ca = math.cos(ang)
+    local sa = math.sin(ang)
+    local rx = fx * ca - fz * sa
+    local rz = fx * sa + fz * ca
+    local a = world_to_screen(vector3(cx, cy, cz))
+    local b = world_to_screen(vector3(cx + rx * radius, cy, cz + rz * radius))
+    if in_screen(a) and in_screen(b) then
+        render.add_line(a, b, CONE_COLOR, 2)
+    end
+end
+
+local function draw_visuals()
+    if not show_vis:get_value() then return end
+    local root = get_my_root()
+    if not valid(root) then return end
+    local p = root.position
+    local cy = p.y - FEET_OFFSET
+    local radius = range_s:get_value() or 14
+    draw_ring(p.x, cy, p.z, radius)
+    if front_on:get_value() then
+        local deg = cone_s:get_value() or 140
+        if deg < 360 then
+            local fx, fz = my_forward(root)
+            local half = (deg / 2) * (math.pi / 180)
+            draw_cone_line(p.x, cy, p.z, fx, fz, half, radius)
+            draw_cone_line(p.x, cy, p.z, fx, fz, -half, radius)
+        end
+    end
+end
+
+local function in_front(root, tp)
+    if not front_on:get_value() then return true end
+    local deg = cone_s:get_value() or 140
+    if deg >= 360 then return true end
+    local p = root.position
+    local dx = tp.x - p.x
+    local dz = tp.z - p.z
+    local mag = math.sqrt((dx * dx) + (dz * dz))
+    if mag < 0.001 then return true end
+    local fx, fz = my_forward(root)
+    local dot = (dx / mag) * fx + (dz / mag) * fz
+    local threshold = math.cos((deg / 2) * (math.pi / 180))
+    return dot >= threshold
+end
+
+local function try_parry(asset, tpos, slot_id, now)
+    if parried[slot_id] then return end
+
+    -- cooldown gate: no parry too soon after the last one
+    if now - last_parry_time < (cd_s:get_value() or 250) then return end
+
+    -- don't fire while a key is still held
+    if key_is_down then return end
+
+    local cfg = ATTACKS[asset]
+    local hit = cfg.parry
+
+    -- convert timing knobs to seconds
+    local prefire = (prefire_s:get_value() or 60) / 1000
+    local net = 0
+    if pingcomp:get_value() then
+        net = (get_ping() or 0) / 1000 / 2
+    end
+
+    -- fire once when the swing reaches (hit - prefire - ping)
+    local trigger = hit - prefire - net
+    if trigger < 0 then trigger = 0 end
+
+    if tpos >= trigger then
+        parried[slot_id] = true
+        last_parry_time = now
+
+        local use_dodge = cfg.m2 and dodge_m2:get_value()
+        if use_dodge then
+            press_key(KEY_DODGE, math.max(hold_s:get_value() or 40, 50))
+        else
+            press_key(KEY_PARRY, hold_s:get_value() or 40)
+        end
+
+        parry_count = parry_count + 1
+        if debug_on:get_value() then
+            log.add("PARRY " .. asset .. " @t=" .. tostring(tpos) ..
+                    " trig=" .. tostring(trigger), green)
+        end
+        act_lbl:set_label("PARRY t=" .. tostring(tpos))
+    end
+end
+
+local function scan(now)
+    local myroot = get_my_root()
+    if not valid(myroot) then return end
+
+    local players = game:get_service("Players")
+    local lp = valid(players) and players.local_player or nil
+    if not valid(lp) then return end
+
+    local mp = myroot.position
+    local range = range_s:get_value() or 14
+    local r2 = range * range
+
+    for _, plr in pairs(get_players()) do
+        if valid(plr) and plr.identity ~= lp.identity then
+            local char = plr.character
+            if valid(char) then
+                local root = char:find_first_child("HumanoidRootPart")
+                local hum = char:find_first_child_class("Humanoid")
+                local anim = valid(hum) and hum:find_first_child_class("Animator") or nil
+
+                if valid(root) and valid(anim) then
+                    local p = root.position
+                    local dx = p.x - mp.x
+                    local dz = p.z - mp.z
+
+                    if (dx*dx + dz*dz) <= r2 and in_front(myroot, p) then
+                        local asset, tpos, slot_id = get_attack(anim)
+                        if asset and slot_id and enabled:get_value() then
+                            try_parry(asset, tpos, slot_id, now)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+hook.add("render", "gakuran_parry", function()
+    local now = get_tickcount()
+
+    draw_visuals()
+    release_if_due(now)  -- always release held keys on time
+
+    if not is_gamefocused() then
+        release_if_due(now)
+        return
+    end
+
+    if now - last_clear > 3000 then
+        last_clear = now
+        parried = {}
+    end
+
+    act_lbl:set_label("parries=" .. tostring(parry_count))
+    scan(now)
+end)
+
+log.add("Gakuran Auto-Parry v2 loaded", green)
