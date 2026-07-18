@@ -101,30 +101,29 @@ local RawConfig = {
         ["rbxassetid://137837926745158"] = atk("1stM1", 150),
         ["rbxassetid://100981571094705"] = atk("2ndM1", 150),
         ["rbxassetid://130865087635587"] = atk("3rdM1", 150),
-        ["rbxassetid://86495068205420"]  = atk("4thM1", 200, { hold = 300 }),
-        ["rbxassetid://120393553812903"] = atk("M2", 350, { dodge = 300, dodgeWindow = 100 }),
+        ["rbxassetid://86495068205420"]  = atk("4thM1", 200, { hold = 320 }),
+        ["rbxassetid://120393553812903"] = atk("M2", 350, { hold = 350, dodge = 300, dodgeWindow = 100 }),
     },
     BasicAnims = {
-        M1Time = 150,
-        ["rbxassetid://83491849294956"]  = atk("1stM1"),
-        ["rbxassetid://89420531853362"]  = atk("2ndM1"),
-        ["rbxassetid://83730275893449"]  = atk("3rdM1"),
-        ["rbxassetid://106980660082799"] = atk("4thM1"),
-        ["rbxassetid://78888626472394"]  = atk("M2", 370, { dodge = 300, dodgeWindow = 100 }),
+        ["rbxassetid://83491849294956"]  = atk("1stM1", 200, { hold = 320 }),
+        ["rbxassetid://89420531853362"]  = atk("2ndM1", 180, { hold = 320 }),
+        ["rbxassetid://83730275893449"]  = atk("3rdM1", 150),
+        ["rbxassetid://106980660082799"] = atk("4thM1", 150),
+        ["rbxassetid://78888626472394"]  = atk("M2", 370, { hold = 320, dodge = 300, dodgeWindow = 100 }),
     },
     WrestlingAnims = {
         ["rbxassetid://91485623489753"]  = atk("4thM1", 220, { window = 110, hold = 280 }),
-        ["rbxassetid://73748315742870"]  = atk("M2", 350, { dodge = 400, dodgeWindow = 100 }),
-        ["rbxassetid://82903450925391"]  = atk("1stM1", 205, { window = 200 }),
-        ["rbxassetid://119685134442395"] = atk("2ndM1", 80),
-        ["rbxassetid://107464726433388"] = atk("3rdM1", 120, { window = 120, hold = 260 }),
+        ["rbxassetid://73748315742870"]  = atk("M2", 350, { hold = 400, dodge = 400, dodgeWindow = 100 }),
+        ["rbxassetid://82903450925391"]  = atk("1stM1", 210, { window = 40, hold = 320 }),
+        ["rbxassetid://119685134442395"] = atk("2ndM1", 110, { window = 40, hold = 320 }),
+        ["rbxassetid://107464726433388"] = atk("3rdM1", 130, { window = 40, hold = 320 }),
     },
     MuayThaiAnims = {
-        ["rbxassetid://137034747040618"] = atk("M2", 370, { dodge = 300, dodgeWindow = 100 }),
-        ["rbxassetid://74960202100098"]  = atk("4thM1", 70, { hold = 280 }),
-        ["rbxassetid://104515319350296"] = atk("3rdM1", 70, { hold = 260 }),
-        ["rbxassetid://139911027872047"] = atk("2ndM1", 70, { hold = 260 }),
-        ["rbxassetid://96726284968458"]  = atk("1stM1", 70),
+        ["rbxassetid://137034747040618"] = atk("M2", 370, { hold = 350, dodge = 300, dodgeWindow = 100 }),
+        ["rbxassetid://74960202100098"]  = atk("4thM1", 110, { window = 40, hold = 280 }),
+        ["rbxassetid://104515319350296"] = atk("3rdM1", 140, { window = 40, hold = 320 }),
+        ["rbxassetid://139911027872047"] = atk("2ndM1", 120, { window = 40, hold = 320 }),
+        ["rbxassetid://96726284968458"]  = atk("1stM1", 100, { window = 60, hold = 320 }),
     },
     BoxingAnims = {
         ["rbxassetid://137980914350618"] = atk("1stM1", 70),
@@ -148,11 +147,11 @@ local RawConfig = {
         ["rbxassetid://131071815103338"] = atk("Whirlwind", 303, { dodge = 280, dodgeWindow = 100 }),
     },
     SluggerAnims = {
-        ["rbxassetid://134829666925953"] = atk("1stM1", 300),
-        ["rbxassetid://104867156139010"] = atk("2ndM1", 300),
-        ["rbxassetid://112759168172605"] = atk("3rdM1", 300),
-        ["rbxassetid://114647502301740"] = atk("4thM1", 150),
-        ["rbxassetid://118943955490014"] = atk("M2", 545, { window = 110, dodge = 580, dodgeWindow = 120 }),
+        ["rbxassetid://134829666925953"] = atk("1stM1", 390, { window = 40, hold = 300 }),
+        ["rbxassetid://104867156139010"] = atk("2ndM1", 350, { window = 40, hold = 300 }),
+        ["rbxassetid://112759168172605"] = atk("3rdM1", 350, { window = 40, hold = 300 }),
+        ["rbxassetid://114647502301740"] = atk("4thM1", 260, { window = 40, hold = 300 }),
+        ["rbxassetid://118943955490014"] = atk("M2", 690, { window = 40, hold = 350, dodge = 580, dodgeWindow = 120 }),
     },
     StrikerAnims = {
         ["rbxassetid://127909081017342"] = atk("1stM1"),
@@ -537,9 +536,12 @@ end
 GameConfig["rbxassetid://132022052139564"] = {
     Style = "BoxingAnims",
     DisplayName = "M2",
-    ReactionTime = 580,
-    ParryWindowMs = 240,
-    HoldMs = 600,
+    ReactionTime = 450,
+    ParryWindowMs = 40,
+    HoldMs = 350,
+    SecondReactionTime = 890,
+    SecondParryWindowMs = 40,
+    SecondHoldMs = 600,
     DodgeTime = 300,
     DodgeWindowMs = 100,
     PostDodgeBlockDelay = 350,
@@ -643,6 +645,7 @@ local function make_attack_registry(now, tpos, char, my_root, cfg, should_dodge)
         blockExpire = start_time + base_time + height_adjustment + offset_s:get_value() + window,
         trackTime = tpos,
         processed = false,
+        stage = 1,
         shouldDodge = should_dodge,
         holdMs = cfg.HoldMs or BlockHoldMs,
         reaction = base_time,
@@ -706,14 +709,33 @@ local function evaluate_attacker(plr, char, my_root)
                             end
                         else
                             block_start(now3, reg.holdMs)
+                            local move_name = reg.stage == 2 and "M2 Downcut" or cfg.DisplayName
                             PendingParry = {
                                 style = cfg.Style,
-                                move = cfg.DisplayName,
+                                move = move_name,
                                 at = now3,
                                 reaction = reg.reaction,
                             }
                             if debug_on:get_value() then
-                                log.add(string.format("PARRY %s %s t=%.3f", cfg.Style, cfg.DisplayName, tpos), COLOR_GREEN)
+                                log.add(string.format("PARRY %s %s t=%.3f", cfg.Style, move_name, tpos), COLOR_GREEN)
+                            end
+
+                            if reg.stage == 1 and cfg.SecondReactionTime then
+                                local second_adjust = height_adjust_ms(
+                                    char,
+                                    my_root,
+                                    cfg.SecondReactionTime,
+                                    cfg.Style,
+                                    true
+                                )
+                                reg.stage = 2
+                                reg.processed = false
+                                reg.reaction = cfg.SecondReactionTime
+                                reg.holdMs = cfg.SecondHoldMs or BlockHoldMs
+                                reg.blockStart = reg.startTime + cfg.SecondReactionTime
+                                    + second_adjust + offset_s:get_value()
+                                reg.blockExpire = reg.blockStart
+                                    + (cfg.SecondParryWindowMs or window_s:get_value())
                             end
                         end
                     end
