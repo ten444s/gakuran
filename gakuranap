@@ -1,9 +1,10 @@
-hook.remove("render", "gakuran_v2")
+hook.remove("render", "perpetual")
+gui.remove("perpetual")
 gui.remove("Gakuran V2")
 gui.remove("Gakuran Parry")
 
-_G.__gakuran_v2_run = (_G.__gakuran_v2_run or 0) + 1
-local RUN_ID = _G.__gakuran_v2_run
+_G.__perpetual_run = (_G.__perpetual_run or 0) + 1
+local RUN_ID = _G.__perpetual_run
 
 -- ================= colors =================
 local COLOR_GREEN  = color(0, 1, 0, 1)
@@ -12,6 +13,7 @@ local COLOR_CYAN   = color(0, 1, 1, 1)
 local COLOR_RED    = color(1, 0.2, 0.2, 1)
 local COLOR_WHITE  = color(1, 1, 1, 1)
 local RING_COLOR   = color(0.2, 0.8, 1, 1)
+local DODGE_RING_COLOR = color(1, 0.72, 0.15, 1)
 local CONE_COLOR   = color(1, 0.2, 0.2, 1)
 local RANGE_COLOR  = color(1, 0.2, 0.2, 1)
 
@@ -44,12 +46,12 @@ local ATTR_NUMBER = 5
 
 -- ================= tunables (ms) =================
 local AutoParryRange = 11.5
+local M2DodgeRange = 8
 local ParryWindowMs = 60
-local ProbabilityToParry = 100
 local DefaultReactionMs = 100
 local ParryOffsetMs = 0
-local BlockHoldMs = 400
-local ParryCooldownMs = 800
+local BlockHoldMs = 240
+local ParryCooldownMs = 100
 
 -- ================= success / fail / stun signal animation ids =================
 local ParriedAnimation = {
@@ -80,71 +82,77 @@ for _, n in pairs({
 end
 
 -- ================= GameConfig (ms) =================
-local function atk(display, reaction_ms, parryfn)
-    return { DisplayName = display, ReactionTime = reaction_ms, ParryFunction = parryfn }
+local function atk(display, reaction_ms, options)
+    options = options or {}
+    return {
+        DisplayName = display,
+        ReactionTime = reaction_ms,
+        ParryWindowMs = options.window,
+        HoldMs = options.hold,
+        DodgeTime = options.dodge,
+        DodgeWindowMs = options.dodgeWindow,
+        PostDodgeBlockDelay = options.postDodgeBlockDelay,
+        PostDodgeBlockHold = options.postDodgeBlockHold,
+    }
 end
-
-local ParryFn_BoxingM2
 
 local RawConfig = {
     KarateAnims = {
         ["rbxassetid://137837926745158"] = atk("1stM1", 150),
         ["rbxassetid://100981571094705"] = atk("2ndM1", 150),
-        ["rbxassetid://130865087635587"] = atk("3rdM1", 220),
-        ["rbxassetid://86495068205420"]  = atk("4thM1", 220),
-        ["rbxassetid://120393553812903"] = atk("M2", 300),
+        ["rbxassetid://130865087635587"] = atk("3rdM1", 150),
+        ["rbxassetid://86495068205420"]  = atk("4thM1", 200, { hold = 300 }),
+        ["rbxassetid://120393553812903"] = atk("M2", 350, { dodge = 300, dodgeWindow = 100 }),
     },
     BasicAnims = {
-        M1Time = 140,
+        M1Time = 150,
         ["rbxassetid://83491849294956"]  = atk("1stM1"),
         ["rbxassetid://89420531853362"]  = atk("2ndM1"),
         ["rbxassetid://83730275893449"]  = atk("3rdM1"),
         ["rbxassetid://106980660082799"] = atk("4thM1"),
-        ["rbxassetid://78888626472394"]  = atk("M2", 300),
+        ["rbxassetid://78888626472394"]  = atk("M2", 370, { dodge = 300, dodgeWindow = 100 }),
     },
     WrestlingAnims = {
-        M1Time = 110,
-        ["rbxassetid://91485623489753"]  = atk("4thM1"),
-        ["rbxassetid://73748315742870"]  = atk("M2", 300),
-        ["rbxassetid://82903450925391"]  = atk("1stM1"),
-        ["rbxassetid://119685134442395"] = atk("2ndM1"),
-        ["rbxassetid://107464726433388"] = atk("3rdM1"),
+        ["rbxassetid://91485623489753"]  = atk("4thM1", 220, { window = 110, hold = 280 }),
+        ["rbxassetid://73748315742870"]  = atk("M2", 350, { dodge = 400, dodgeWindow = 100 }),
+        ["rbxassetid://82903450925391"]  = atk("1stM1", 205, { window = 200 }),
+        ["rbxassetid://119685134442395"] = atk("2ndM1", 80),
+        ["rbxassetid://107464726433388"] = atk("3rdM1", 120, { window = 120, hold = 260 }),
     },
     MuayThaiAnims = {
-        M1Time = 100,
-        ["rbxassetid://137034747040618"] = atk("M2", 300),
-        ["rbxassetid://74960202100098"]  = atk("4thM1"),
-        ["rbxassetid://104515319350296"] = atk("3rdM1"),
-        ["rbxassetid://139911027872047"] = atk("2ndM1"),
-        ["rbxassetid://96726284968458"]  = atk("1stM1"),
+        ["rbxassetid://137034747040618"] = atk("M2", 370, { dodge = 300, dodgeWindow = 100 }),
+        ["rbxassetid://74960202100098"]  = atk("4thM1", 70, { hold = 280 }),
+        ["rbxassetid://104515319350296"] = atk("3rdM1", 70, { hold = 260 }),
+        ["rbxassetid://139911027872047"] = atk("2ndM1", 70, { hold = 260 }),
+        ["rbxassetid://96726284968458"]  = atk("1stM1", 70),
     },
     BoxingAnims = {
-        ["rbxassetid://137980914350618"] = atk("1stM1", 120),
-        ["rbxassetid://100408082509740"] = atk("2ndM1", 120),
-        ["rbxassetid://94803478352691"]  = atk("3rdM1", 150),
-        ["rbxassetid://78695517680318"]  = atk("4thM1", 150),
+        ["rbxassetid://137980914350618"] = atk("1stM1", 70),
+        ["rbxassetid://100408082509740"] = atk("2ndM1", 70),
+        ["rbxassetid://94803478352691"]  = atk("3rdM1", 60),
+        ["rbxassetid://78695517680318"]  = atk("4thM1", 200, { window = 140, hold = 280 }),
     },
     HakariAnims = {
-        ["rbxassetid://82855179231529"]  = atk("MomentumM2"),
-        ["rbxassetid://76236532060812"]  = atk("1stM1", 150),
-        ["rbxassetid://74206130671324"]  = atk("2ndM1", 170),
-        ["rbxassetid://71919935695307"]  = atk("3rdM1", 150),
-        ["rbxassetid://122861547142657"] = atk("4thM1", 210),
-        ["rbxassetid://92851992709496"]  = atk("M2", 350),
+        ["rbxassetid://82855179231529"]  = atk("MomentumM2", 360, { window = 160, hold = 450, dodge = 350, dodgeWindow = 100 }),
+        ["rbxassetid://76236532060812"]  = atk("1stM1", 190),
+        ["rbxassetid://74206130671324"]  = atk("2ndM1", 210),
+        ["rbxassetid://71919935695307"]  = atk("3rdM1", 190),
+        ["rbxassetid://122861547142657"] = atk("4thM1", 230, { hold = 320 }),
+        ["rbxassetid://92851992709496"]  = atk("M2", 360, { window = 160, hold = 450, dodge = 350, dodgeWindow = 100 }),
     },
     CapoeiraAnims = {
-        ["rbxassetid://125976167173936"] = atk("1stM1", 150),
-        ["rbxassetid://134945199381140"] = atk("2ndM1", 220),
-        ["rbxassetid://117877243065533"] = atk("3rdM1", 160),
-        ["rbxassetid://106965238908791"] = atk("4thM1", 160),
-        ["rbxassetid://131071815103338"] = atk("Whirlwind", 320),
+        ["rbxassetid://125976167173936"] = atk("1stM1", 165, { hold = 300 }),
+        ["rbxassetid://134945199381140"] = atk("2ndM1", 250, { hold = 300 }),
+        ["rbxassetid://117877243065533"] = atk("3rdM1", 207, { hold = 300 }),
+        ["rbxassetid://106965238908791"] = atk("4thM1", 145, { hold = 300 }),
+        ["rbxassetid://131071815103338"] = atk("Whirlwind", 303, { dodge = 280, dodgeWindow = 100 }),
     },
     SluggerAnims = {
-        ["rbxassetid://134829666925953"] = atk("1stM1", 240),
-        ["rbxassetid://104867156139010"] = atk("2ndM1", 220),
-        ["rbxassetid://112759168172605"] = atk("3rdM1", 220),
-        ["rbxassetid://114647502301740"] = atk("4thM1", 190),
-        ["rbxassetid://118943955490014"] = atk("M2", 650),
+        ["rbxassetid://134829666925953"] = atk("1stM1", 300),
+        ["rbxassetid://104867156139010"] = atk("2ndM1", 300),
+        ["rbxassetid://112759168172605"] = atk("3rdM1", 300),
+        ["rbxassetid://114647502301740"] = atk("4thM1", 150),
+        ["rbxassetid://118943955490014"] = atk("M2", 545, { window = 110, dodge = 580, dodgeWindow = 120 }),
     },
     StrikerAnims = {
         ["rbxassetid://127909081017342"] = atk("1stM1"),
@@ -159,18 +167,18 @@ local RawConfig = {
     },
     KureAnims = {
         ["rbxassetid://71676634048602"]  = atk("4thM1"),
-        ["rbxassetid://102407060635393"] = atk("M2", 10),
-        ["rbxassetid://82904229252991"]  = atk("1stM1"),
-        ["rbxassetid://103732110215321"] = atk("2ndM1"),
-        ["rbxassetid://103964436023727"] = atk("3rdM1"),
+        ["rbxassetid://102407060635393"] = atk("M2", 100, { window = 100, hold = 300, dodge = 80, dodgeWindow = 80 }),
+        ["rbxassetid://82904229252991"]  = atk("1stM1", 150),
+        ["rbxassetid://103732110215321"] = atk("2ndM1", 150, { hold = 240 }),
+        ["rbxassetid://103964436023727"] = atk("3rdM1", 150, { hold = 240 }),
     },
     HakariOtherAnims = {
-        ["rbxassetid://126612786608030"] = atk("1stM1"),
-        ["rbxassetid://113719263885794"] = atk("2ndM1"),
-        ["rbxassetid://136305578634960"] = atk("3rdM1"),
-        ["rbxassetid://89039586375625"]  = atk("4thM1"),
-        ["rbxassetid://82855179231529"]  = atk("MomentumM2"),
-        ["rbxassetid://101619248052969"] = atk("M2"),
+        ["rbxassetid://126612786608030"] = atk("1stM1", 190),
+        ["rbxassetid://113719263885794"] = atk("2ndM1", 210),
+        ["rbxassetid://136305578634960"] = atk("3rdM1", 190),
+        ["rbxassetid://89039586375625"]  = atk("4thM1", 230, { hold = 320 }),
+        ["rbxassetid://82855179231529"]  = atk("MomentumM2", 360, { window = 160, hold = 450, dodge = 350, dodgeWindow = 100 }),
+        ["rbxassetid://101619248052969"] = atk("M2", 360, { window = 160, hold = 450, dodge = 350, dodgeWindow = 100 }),
     },
 }
 
@@ -187,6 +195,12 @@ for styleName, moves in pairs(RawConfig) do
                 Style = styleName,
                 DisplayName = data.DisplayName,
                 ReactionTime = reaction,
+                ParryWindowMs = data.ParryWindowMs,
+                HoldMs = data.HoldMs,
+                DodgeTime = data.DodgeTime,
+                DodgeWindowMs = data.DodgeWindowMs,
+                PostDodgeBlockDelay = data.PostDodgeBlockDelay,
+                PostDodgeBlockHold = data.PostDodgeBlockHold,
                 ParryFunction = data.ParryFunction,
             }
         end
@@ -198,35 +212,38 @@ local copy_unknown_ids
 local reset_settings
 
 -- ================= menu (declare BEFORE functions that read it) =================
-local MENU_NAME = "Gakuran V2"
+local MENU_NAME = "perpetual"
 local menu = gui.create(MENU_NAME, false)
-menu:set_size(360, 620)
+menu:set_size(390, 820)
 
 menu:add_label("--- Auto Parry ---")
 local parry_on   = menu:add_checkbox("Auto Parry", true)
-local dodge_on   = menu:add_checkbox("Auto Dodge (M2)", true)
 local facing_them = menu:add_checkbox("They Face Me", false)
 local facing_me   = menu:add_checkbox("I Face Them", true)
 local height_on   = menu:add_checkbox("Height Adjust", true)
-local log_unknown = menu:add_checkbox("Log Unknown IDs", false)
-local debug_on    = menu:add_checkbox("Debug Log", false)
 
 local range_s  = menu:add_slider("Range", 5, 80, AutoParryRange)
 local window_s = menu:add_slider("Parry Window (ms)", 10, 300, ParryWindowMs)
-local offset_s = menu:add_slider("Parry Offset (ms)", -200, 200, ParryOffsetMs)
+local offset_s = menu:add_slider("Timing Offset (ms)", -200, 200, ParryOffsetMs)
 local default_s = menu:add_slider("Default Reaction (ms)", 10, 500, DefaultReactionMs)
-local prob_s   = menu:add_slider("Probability To Parry %", 1, 100, ProbabilityToParry)
 local cone_s   = menu:add_slider("Face Cone", 30, 360, 160)
 local vert_s   = menu:add_slider("Vertical Range", 2, 40, 8)
 local show_esp   = menu:add_checkbox("Show Range", true)
 local mark_rng   = menu:add_checkbox("Mark In Range", true)
 local mark_gate  = menu:add_checkbox("Mark Angle Only", false)
 
+menu:add_label("--- Auto Dodge ---")
+local dodge_on   = menu:add_checkbox("Dodge Close M2", true)
+local dodge_range_s = menu:add_slider("M2 Dodge Range", 1, 30, M2DodgeRange)
+local show_dodge_esp = menu:add_checkbox("Show Dodge Range", true)
+
+menu:add_label("--- Logs ---")
+local log_unknown = menu:add_checkbox("Log Unknown IDs", false)
+local debug_on    = menu:add_checkbox("Debug Log", false)
 local copy_ids_btn = menu:add_button("Copy Unknown IDs", function() copy_unknown_ids() end)
 
 menu:add_label("--- Instrument Autoplay ---")
 local instrument_on = menu:add_checkbox("Autoplay", false)
-local instrument_vis = menu:add_checkbox("Visual", true)
 
 menu:add_label("--- Settings ---")
 local reset_btn = menu:add_button("Reset To Defaults", function() reset_settings() end)
@@ -234,29 +251,29 @@ local reset_btn = menu:add_button("Reset To Defaults", function() reset_settings
 local status_lbl = menu:add_label("status: idle")
 
 -- ================= settings persistence =================
-local SETTINGS_FILE = "gakuran_v2_settings.json"
+local SETTINGS_FILE = "perpetual_settings.json"
 
 local SAVED_CHECKS = {
     { key = "parry_on",       label = "Auto Parry",         w = parry_on,       def = true  },
-    { key = "dodge_on",       label = "Auto Dodge (M2)",    w = dodge_on,       def = true  },
+    { key = "dodge_on",       label = "Dodge Close M2",     w = dodge_on,       def = true  },
     { key = "facing_them",    label = "They Face Me",       w = facing_them,    def = false },
     { key = "facing_me",      label = "I Face Them",        w = facing_me,      def = true  },
     { key = "height_on",      label = "Height Adjust",      w = height_on,      def = true  },
+    { key = "show_dodge_esp", label = "Show Dodge Range",   w = show_dodge_esp, def = true  },
     { key = "log_unknown",    label = "Log Unknown IDs",    w = log_unknown,    def = false },
     { key = "debug_on",       label = "Debug Log",          w = debug_on,       def = false },
     { key = "show_esp",       label = "Show Range",         w = show_esp,       def = true  },
     { key = "mark_rng",       label = "Mark In Range",      w = mark_rng,       def = true  },
     { key = "mark_gate",      label = "Mark Angle Only",    w = mark_gate,      def = false },
     { key = "instrument_on",  label = "Autoplay",           w = instrument_on,  def = false },
-    { key = "instrument_vis", label = "Visual",             w = instrument_vis, def = true  },
 }
 
 local SAVED_SLIDERS = {
     { key = "range_s",   label = "Range",                  w = range_s,   def = AutoParryRange },
+    { key = "dodge_range_s", label = "M2 Dodge Range",      w = dodge_range_s, def = M2DodgeRange },
     { key = "window_s",  label = "Parry Window (ms)",      w = window_s,  def = ParryWindowMs },
-    { key = "offset_s",  label = "Parry Offset (ms)",      w = offset_s,  def = ParryOffsetMs },
+    { key = "offset_s",  label = "Timing Offset (ms)",     w = offset_s,  def = ParryOffsetMs },
     { key = "default_s", label = "Default Reaction (ms)",  w = default_s, def = DefaultReactionMs },
-    { key = "prob_s",    label = "Probability To Parry %", w = prob_s,    def = ProbabilityToParry },
     { key = "cone_s",    label = "Face Cone",              w = cone_s,    def = 160 },
     { key = "vert_s",    label = "Vertical Range",         w = vert_s,    def = 8 },
 }
@@ -332,6 +349,7 @@ local HeightCache = {}
 local KeyHeld = false
 local ReleaseAt = 0
 local LastPressAt = -999999
+local DelayedBlocks = {}
 
 local PendingParry = nil
 local PARRY_RESOLVE_MS = 900
@@ -498,6 +516,14 @@ local function key_frame(now)
     if KeyHeld and now >= ReleaseAt then
         block_end()
     end
+
+    for i = #DelayedBlocks, 1, -1 do
+        local pending = DelayedBlocks[i]
+        if now >= pending.at then
+            table.remove(DelayedBlocks, i)
+            block_start(now, pending.hold)
+        end
+    end
 end
 
 local function do_dodge()
@@ -508,30 +534,49 @@ local function do_dodge()
     end
 end
 
-local function boxing_m2_sequence()
-    wait(300)
-    do_dodge()
-    wait(350)
-    block_start(get_tickcount(), 600)
-end
-
-ParryFn_BoxingM2 = function(ctx)
-    if ctx.reg.processed then return end
-    ctx.reg.processed = true
-    if debug_on:get_value() then log.add("Boxing M2: dodge uppercut, block downcut", COLOR_YELLOW) end
-    spawn(boxing_m2_sequence)
-end
-
 GameConfig["rbxassetid://132022052139564"] = {
-    Style = "BoxingAnims", DisplayName = "M2", ReactionTime = nil, ParryFunction = ParryFn_BoxingM2,
+    Style = "BoxingAnims",
+    DisplayName = "M2",
+    ReactionTime = 580,
+    ParryWindowMs = 240,
+    HoldMs = 600,
+    DodgeTime = 300,
+    DodgeWindowMs = 100,
+    PostDodgeBlockDelay = 350,
+    PostDodgeBlockHold = 600,
 }
 
 -- ================= remote-attacker evaluation =================
-local function height_adjust_ms(char, base_ms)
+local function height_coeff(style, is_heavy)
+    if style == "WrestlingAnims" then return is_heavy and 0.22 or 0.36 end
+    if style == "HakariAnims" or style == "HakariOtherAnims" then return is_heavy and 0.18 or 0.34 end
+    return is_heavy and 0.16 or 0.24
+end
+
+local function height_adjust_ms(char, my_root, base_ms, style, is_heavy)
     if not height_on:get_value() then return 0 end
-    local h = get_height(char)
-    if not h then return 0 end
-    local adj = base_ms * 0.16 * (h - 1.5)
+
+    local local_player = get_local_player()
+    local local_char = valid(local_player) and local_player.character or nil
+    local attacker_attr = get_current_height_attr(char)
+    local local_attr = get_current_height_attr(local_char)
+    local delta
+
+    if type(attacker_attr) == "number" and type(local_attr) == "number" then
+        delta = attacker_attr - local_attr
+    else
+        delta = (get_height(char) or 1.5) - 1.5
+    end
+
+    local attacker_root = char:find_first_child("HumanoidRootPart")
+    if valid(attacker_root) and valid(my_root) then
+        local vertical = attacker_root.position.y - my_root.position.y
+        if math.abs(vertical) > 1 then
+            delta = delta + clamp(vertical * 0.12, -0.25, 0.35)
+        end
+    end
+
+    local adj = base_ms * height_coeff(style, is_heavy) * delta
     return clamp(adj, -100, 100)
 end
 
@@ -560,6 +605,50 @@ local function check_direction(is_heavy, my_root, attacker_root)
     return true
 end
 
+local function is_heavy_move(display_name)
+    return display_name == "M2" or display_name == "Whirlwind" or display_name == "MomentumM2"
+end
+
+local DodgeTimingByStyle = {
+    KarateAnims = { time = 300, window = 100 },
+    BasicAnims = { time = 300, window = 100 },
+    WrestlingAnims = { time = 400, window = 100 },
+    MuayThaiAnims = { time = 300, window = 100 },
+    BoxingAnims = { time = 300, window = 100 },
+    HakariAnims = { time = 350, window = 100 },
+    HakariOtherAnims = { time = 350, window = 100 },
+    CapoeiraAnims = { time = 280, window = 100 },
+    SluggerAnims = { time = 580, window = 120 },
+    StrikerAnims = { time = 300, window = 100 },
+    KureAnims = { time = 80, window = 80 },
+}
+
+local function dodge_timing_for(cfg)
+    local tuned = DodgeTimingByStyle[cfg.Style] or {}
+    return cfg.DodgeTime or tuned.time or 360, cfg.DodgeWindowMs or tuned.window or 100
+end
+
+local function make_attack_registry(now, tpos, char, my_root, cfg, should_dodge)
+    local dodge_time, dodge_window = dodge_timing_for(cfg)
+    local base_time = should_dodge and dodge_time or cfg.ReactionTime
+    base_time = base_time or default_s:get_value()
+    local is_heavy = is_heavy_move(cfg.DisplayName)
+    local height_adjustment = height_adjust_ms(char, my_root, base_time, cfg.Style, is_heavy)
+    local window = should_dodge and dodge_window or (cfg.ParryWindowMs or window_s:get_value())
+    local start_time = now - (tpos * 1000)
+
+    return {
+        startTime = start_time,
+        blockStart = start_time + base_time + height_adjustment + offset_s:get_value(),
+        blockExpire = start_time + base_time + height_adjustment + offset_s:get_value() + window,
+        trackTime = tpos,
+        processed = false,
+        shouldDodge = should_dodge,
+        holdMs = cfg.HoldMs or BlockHoldMs,
+        reaction = base_time,
+    }
+end
+
 local function evaluate_attacker(plr, char, my_root)
     local root = char:find_first_child("HumanoidRootPart")
     local animator = get_animator(char)
@@ -582,54 +671,46 @@ local function evaluate_attacker(plr, char, my_root)
             local key = tostring(plr.identity) .. "|" .. assetId
             local reg = AnimRegistry[key]
             local now = get_tickcount()
-            local is_heavy = cfg.DisplayName == "M2"
+            local is_heavy = is_heavy_move(cfg.DisplayName)
+            local close_m2 = is_heavy and dodge_on:get_value()
+                and math.sqrt(dist2) <= dodge_range_s:get_value()
 
             if not reg then
-                local reaction = height_adjust_ms(char, cfg.ReactionTime or default_s:get_value())
-                local base = (cfg.ReactionTime or default_s:get_value()) + reaction + offset_s:get_value()
-                local start_estimate = now - (tpos * 1000)
-                reg = {
-                    startTime = start_estimate,
-                    blockStart = start_estimate + base,
-                    blockExpire = start_estimate + base + window_s:get_value(),
-                    trackTime = tpos,
-                    processed = false,
-                    roll = math.random(1, 100),
-                }
+                reg = make_attack_registry(now, tpos, char, my_root, cfg, close_m2)
                 AnimRegistry[key] = reg
             end
 
             if tpos < reg.trackTime - 0.02 then
-                local reaction = height_adjust_ms(char, cfg.ReactionTime or default_s:get_value())
-                local base = (cfg.ReactionTime or default_s:get_value()) + reaction + offset_s:get_value()
-                local now2 = get_tickcount()
-                local start_estimate = now2 - (tpos * 1000)
-                reg.startTime = start_estimate
-                reg.blockStart = start_estimate + base
-                reg.blockExpire = start_estimate + base + window_s:get_value()
-                reg.processed = false
+                reg = make_attack_registry(now, tpos, char, my_root, cfg, close_m2)
+                AnimRegistry[key] = reg
             end
             reg.trackTime = tpos
 
             if not reg.processed then
                 if cfg.ParryFunction then
                     cfg.ParryFunction({ reg = reg, char = char, style = cfg.Style, move = cfg.DisplayName })
-                elseif check_direction(is_heavy, my_root, root) and reg.roll <= prob_s:get_value() then
+                elseif check_direction(is_heavy, my_root, root) then
                     local now3 = get_tickcount()
                     if now3 >= reg.blockStart and now3 <= reg.blockExpire then
                         reg.processed = true
-                        if is_heavy and dodge_on:get_value() then
+                        if reg.shouldDodge then
                             do_dodge()
+                            if cfg.PostDodgeBlockDelay then
+                                DelayedBlocks[#DelayedBlocks + 1] = {
+                                    at = now3 + cfg.PostDodgeBlockDelay,
+                                    hold = cfg.PostDodgeBlockHold or BlockHoldMs,
+                                }
+                            end
                             if debug_on:get_value() then
-                                log.add(string.format("DODGE %s %s", cfg.Style, cfg.DisplayName), COLOR_YELLOW)
+                                log.add(string.format("DODGE %s %s @ %.3f", cfg.Style, cfg.DisplayName, tpos), COLOR_YELLOW)
                             end
                         else
-                            block_start(now3, BlockHoldMs)
+                            block_start(now3, reg.holdMs)
                             PendingParry = {
                                 style = cfg.Style,
                                 move = cfg.DisplayName,
                                 at = now3,
-                                reaction = cfg.ReactionTime or default_s:get_value(),
+                                reaction = reg.reaction,
                             }
                             if debug_on:get_value() then
                                 log.add(string.format("PARRY %s %s t=%.3f", cfg.Style, cfg.DisplayName, tpos), COLOR_GREEN)
@@ -769,7 +850,7 @@ local function in_front_of_camera(cam, world_pos)
     return (dx * look.x) + (dy * look.y) + (dz * look.z) > 0
 end
 
-local function draw_range_ring(cam, cx, cy, cz, radius)
+local function draw_range_ring(cam, cx, cy, cz, radius, ring_color)
     local prev, prev_ok = nil, false
     for i = 0, RING_SEGMENTS do
         local ang = (i / RING_SEGMENTS) * math.pi * 2
@@ -778,7 +859,7 @@ local function draw_range_ring(cam, cx, cy, cz, radius)
         local sp = ok and world_to_screen(wp) or nil
         if ok then ok = in_screen(sp) end
         if prev and prev_ok and ok then
-            render.add_line(prev, sp, RING_COLOR, 2)
+            render.add_line(prev, sp, ring_color, 2)
         end
         prev = sp
         prev_ok = ok
@@ -834,7 +915,7 @@ local function draw_parry_esp()
     local cy = p.y - FEET_OFFSET
 
     if show_esp:get_value() then
-        draw_range_ring(cam, p.x, cy, p.z, radius)
+        draw_range_ring(cam, p.x, cy, p.z, radius, RING_COLOR)
         if facing_me:get_value() then
             local deg = cone_s:get_value()
             if deg < 360 then
@@ -844,6 +925,10 @@ local function draw_parry_esp()
                 draw_cone_line(cam, p.x, cy, p.z, fx, fz, -half, radius)
             end
         end
+    end
+
+    if dodge_on:get_value() and show_dodge_esp:get_value() then
+        draw_range_ring(cam, p.x, cy, p.z, dodge_range_s:get_value(), DODGE_RING_COLOR)
     end
 
     if not mark_rng:get_value() then return end
@@ -1214,7 +1299,7 @@ local function instrument_fire_pending(now)
 end
 
 local function draw_instrument_notes()
-    if not instrument_on:get_value() or not instrument_vis:get_value() then return end
+    if not instrument_on:get_value() then return end
     if not guiActive or not uiReceptorData then return end
 
     local scale = get_scale()
@@ -1234,7 +1319,7 @@ local function draw_instrument_notes()
 end
 
 local function draw_instrument_esp()
-    if not instrument_on:get_value() or not instrument_vis:get_value() then return end
+    if not instrument_on:get_value() then return end
     if not guiActive or not uiReceptorData then return end
 
     local scale = get_scale()
@@ -1335,7 +1420,7 @@ local function main_loop(now)
 end
 
 spawn(function()
-    while _G.__gakuran_v2_run == RUN_ID do
+    while _G.__perpetual_run == RUN_ID do
         main_loop(get_tickcount())
         wait(guiActive and INSTRUMENT_TICK_MS or main_tick_ms)
     end
@@ -1343,9 +1428,8 @@ spawn(function()
     release_all_instrument_keys()
 end)
 
-hook.add("render", "gakuran_v2", function()
+hook.add("render", "perpetual", function()
     draw_parry_esp()
-    draw_instrument_esp()
 
     local held_str = KeyHeld and "  [F]" or ""
     local instr_str = guiActive and ("  lanes=" .. tostring(activeLaneCount)) or "  lanes=none"
@@ -1358,4 +1442,4 @@ if settings_load() then
 end
 last_settings_json = select(2, pcall(function() return table_to_JSON(settings_snapshot()) end)) or ""
 
-log.add("Gakuran V2 (Photon) loaded -- auto-parry + instrument merged", COLOR_GREEN)
+log.add("perpetual loaded -- auto-parry + instrument", COLOR_GREEN)
