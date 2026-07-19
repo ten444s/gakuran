@@ -320,7 +320,7 @@ local function settings_load()
             v = 0
         end
         if type(v) == "number" then
-            pcall(function() render.setvalue(MENU_NAME, e.label, v ~= 0) end)
+            pcall(function() ui.setvalue(MENU_NAME, e.label, v ~= 0) end)
         end
     end
     for _, e in ipairs(SAVED_SLIDERS) do
@@ -335,7 +335,7 @@ local function settings_load()
             end
         end
         if type(v) == "number" then
-            pcall(function() render.setvalue(MENU_NAME, e.label, v) end)
+            pcall(function() ui.setvalue(MENU_NAME, e.label, v) end)
         end
     end
     return true
@@ -1736,15 +1736,21 @@ end
 -- ================= copy-unknown implementation =================
 reset_settings = function()
     for _, e in ipairs(SAVED_CHECKS) do
-        pcall(function() render.setvalue(MENU_NAME, e.label, e.def) end)
+        pcall(function() ui.setvalue(MENU_NAME, e.label, e.def) end)
     end
     for _, e in ipairs(SAVED_SLIDERS) do
-        pcall(function() render.setvalue(MENU_NAME, e.label, e.def) end)
+        pcall(function() ui.setvalue(MENU_NAME, e.label, e.def) end)
     end
 
-    pcall(function() file.delete_file(SETTINGS_FILE) end)
-    last_settings_json = ""
-    log.add("[settings] reset to defaults", COLOR_CYAN)
+    local ok, snapshot = pcall(function() return table_to_JSON(settings_snapshot()) end)
+    if ok then
+        last_settings_json = snapshot
+        if settings_save() then
+            log.add("[settings] reset to defaults and saved", COLOR_CYAN)
+        end
+    else
+        log.add("[settings] reset failed", COLOR_RED)
+    end
 end
 
 copy_unknown_ids = function()
